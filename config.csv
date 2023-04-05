@@ -1,0 +1,17 @@
+displayDelay:1000;
+integrationCount:5;
+lowerTemp:20;
+upperTemp:24;
+decimalCount:2;
+recordingDelay:1;
+lowerAirflow:0;
+upperAirflow:1;
+testFileDescription:LG convertible purifier;
+testFileName:TestOutput;
+filePath:C|\Users\Arturas\Desktop\Latest Grid Software\Release_v2_vanilla\Test outputs;
+arduinoPort:COM3;
+constFilePath:C|\Users\Arturas\Desktop\Latest Grid Software\Release_v2_vanilla\Constants28Dec.csv;
+sensorIDFilePath:C|\Users\Arturas\Desktop\Latest Grid Software\Release_v2_vanilla\sensorGridConfig.csv;
+humidity:0.5;
+imgSavePath:C|\Users\Arturas\Desktop\Latest Grid Software\Release_v2_vanilla\Images;
+Note: replace ":" with "|" when changing any file path e.g. "C|\Users\Admin" instead of "C:\Users\Admin"

@@ -6,6 +6,8 @@ Created on Fri Mar 17 16:11:06 2023
 @author: abc
 """
 
+# Import packages
+
 import serial # used pip to install since conda was stuck due to inconsistencies in environment
 import CRC  # user-defined class. To be saved in the same folder as the calling Python file.
 import re # This module provides regular expression matching operations.

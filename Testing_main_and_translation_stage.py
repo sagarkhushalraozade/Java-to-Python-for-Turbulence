@@ -33,7 +33,8 @@ humidity = 0.35
 negativeLimit = -0.5 # m/s
 count_pos = 0
 vel_instances = 50 # Instances of velocity, temperature to record at a given Up-Right position
-Test_name = "First_test"
+time_for_equilibrium = 30 # seconds
+Test_name = "Second_test"
 
 #%% Function to parse position from translation stage data
 def parse_position(port):
@@ -52,7 +53,7 @@ def parse_position(port):
                 return float(up_str), float(right_str), int(count_pos)
             elif (data_str == "All left-right positions are reached. Hence, all positions are reached"):
                 print(data_str)
-                count_pos = count_pos
+                count_pos = 123456
                 up_str = None
                 right_str = None
                 return up_str, right_str, count_pos
@@ -72,7 +73,7 @@ sensorIDList = [_ for _ in range(1,37)] # [1 2 3 .......36]
 sensor_array = np.reshape(sensorIDList, (6,6))
 sensor_array = sensor_array[::-1,:] # Reversing the rows.
 sensorIDList = np.reshape(sensor_array,(36)) # [36 35 34 33 32 31 25.....1 2 3 4 5 6] # This is what I see experimentally.
-sensor_physical_x_pos, sensor_physical_y_pos = np.meshgrid(np.arange(250,0-0.01,-50, dtype=int), np.arange(250,0-0.01,-50, dtype=int)) # Physical position of the velocity sensors in meters. Origin is at the bottom right corner.
+sensor_physical_x_pos, sensor_physical_y_pos = np.meshgrid(np.arange(0,250+0.01,50, dtype=int), np.arange(0,250+0.01,50, dtype=int)) # Physical position of the velocity sensors in meters. Origin is at the bottom right corner.
 range_set, constants_general = read_const('Constants28Dec.csv')
 crc_Type = "NoCheck" # Can choose between "NoCheck", "CRC8", "CRC16", "CRC32"
 currentFlowMap = {key: 0.0 for key in sensorIDList}
@@ -103,8 +104,8 @@ def read_velocity_matrix():
     return np.empty((6, 6)), np.empty((6, 6)) # If bytes_read is not created.
 
 #%% Function to find mean of 3d velocity and temperature data by disregarding the spurious data
-def find_mean(data_3d):
-    mean_data_2d = np.nanmean(data_3d[10:,:,:], axis=0)
+def find_median(data_3d):
+    mean_data_2d = np.nanmedian(data_3d[10:,:,:], axis=0)
     return mean_data_2d
 
 #%% Function to interpolate velocity and temperature data
@@ -121,8 +122,8 @@ def fine_interpolation(master_array, interpolation_method):
 
 #%% Main loop
 
-# results_save_dir = rf"C:/Users/ZadeSag/OneDrive - Electrolux/Documents/Projects/Air Care/Grid/Grid Macbook/Java-to-Python-for-Turbulence/" + Test_name # For WIndows.
-results_save_dir = rf"/Users/sagarzade/Library/CloudStorage/OneDrive-Electrolux/Documents/Projects/Air Care/Grid/Grid Macbook/Java-to-Python-for-Turbulence/" + Test_name # For MacOS.
+results_save_dir = rf"C:/Users/ZadeSag/OneDrive - Electrolux/Documents/Projects/Air Care/Grid/Grid Macbook/Java-to-Python-for-Turbulence/" + Test_name # For WIndows.
+# results_save_dir = rf"/Users/sagarzade/Library/CloudStorage/OneDrive-Electrolux/Documents/Projects/Air Care/Grid/Grid Macbook/Java-to-Python-for-Turbulence/" + Test_name # For MacOS.
 if not os.path.exists(results_save_dir):
     os.mkdir(results_save_dir)
 else:
@@ -137,6 +138,9 @@ try:
         if up is not None and right is not None and count_pos is not None:
             velocity_data_3d = np.empty((vel_instances,6,6))
             temperature_data_3d = np.empty((vel_instances,6,6))
+            
+            logging.info(rf"Waiting for {time_for_equilibrium} seconds.")
+            time.sleep(time_for_equilibrium)
 
             for i in range(vel_instances):  # Collect vel_instances velocity-matrices
                 velocity_matrix, temperature_matrix = read_velocity_matrix()
@@ -156,7 +160,7 @@ try:
             logging.info(f"Saved velocity and temperature data")
             print(rf"Read up = {up} and right = {right}, position number = {count_pos}")
             
-        elif  up is None and right is None and count_pos is None:
+        elif  up is None and right is None and count_pos is 123456:
             print("Exiting the while loop")
             break  # Exit the while loop and go to finally.
 except KeyboardInterrupt:
@@ -168,7 +172,7 @@ finally:
  
 #%% To load the data.
 # files_saved = os.listdir(results_save_dir) # Also counts .DStore as a file.
-files_saved  = glob.glob(results_save_dir + "/*.npz")
+files_saved  = sorted(glob.glob(results_save_dir + "/*.npz"),key=os.path.getmtime)
 num_files = len(files_saved)
 master_vel_array = np.empty((250+50,250+50)) # Grid of 300 cm x 300 cm. We will populate data at 1 cm resolution.
 master_vel_array[:,:] = None # nan everywhere.
@@ -177,24 +181,25 @@ master_temp_array = np.copy(master_vel_array)
 for i in range(num_files):
     file_to_load = files_saved[i] # os.path.abspath gives pwd
     data = np.load(file_to_load, allow_pickle=True)
-    vel_data = find_mean(data['velocity_data_3d'])
-    temp_data = find_mean(data['temperature_data_3d'])
+    vel_data = find_median(data['velocity_data_3d'])
+    temp_data = find_median(data['temperature_data_3d'])
     table_up_pos = data['up_position']
     table_right_pos = data['right_position']
     pos_num = data['position_number']
     data.close()
     data_position_x, data_position_y = int(np.round(table_right_pos,0)), int(np.round(table_up_pos,0)) 
-    master_vel_array[sensor_physical_x_pos + data_position_x, sensor_physical_y_pos + data_position_y] = vel_data
-    master_temp_array[sensor_physical_x_pos + data_position_x, sensor_physical_y_pos + data_position_y] = temp_data
+    # input(rf"Position is up = {data_position_y}, right = {data_position_x}")
+    master_vel_array[sensor_physical_y_pos + data_position_y, sensor_physical_x_pos + data_position_x] = vel_data
+    master_temp_array[sensor_physical_y_pos + data_position_y, sensor_physical_x_pos + data_position_x] = temp_data
     # for loop end
 
 # Interpolate velocities at places where values are nan.
-master_vel_array_interpolated = fine_interpolation(master_vel_array, 'linear')
-master_temp_array_interpolated = fine_interpolation(master_temp_array, 'linear')
+master_vel_array_interpolated = fine_interpolation(master_vel_array, 'cubic')
+master_temp_array_interpolated = fine_interpolation(master_temp_array, 'cubic')
 
 fig1, (ax1, ax2) = plt.subplots(1,2, figsize=(14,8)) # 14" width of figure.
 
-im1 = ax1.imshow(master_vel_array_interpolated, cmap = 'jet', interpolation = 'None')
+im1 = ax1.imshow(master_vel_array_interpolated, cmap = 'jet', interpolation = 'None', vmin = 0.3)
 cbar1 = fig1.colorbar(im1, ax = ax1)
 ax1.set_aspect('equal')
 ax1.set_xticks(np.arange(0, 300, 10))
@@ -203,7 +208,7 @@ ax1.set_xticklabels(ax1.get_xticks(), rotation = 90)
 ax1.grid(which='major', color='w', linestyle='-', linewidth=0.2)
 ax1.set_title('Velocity (m/s)')
 
-im2 = ax2.imshow(master_temp_array_interpolated, cmap = 'jet', interpolation = 'None')
+im2 = ax2.imshow(master_temp_array_interpolated, cmap = 'jet', interpolation = 'None', vmin = 15, vmax = 30)
 cbar2 = fig1.colorbar(im2, ax = ax2)
 ax2.set_aspect('equal')
 ax2.set_xticks(np.arange(0, 300, 10))
@@ -214,19 +219,49 @@ ax2.set_title('Temperature ($^\circ$C)')
 
 
 
+#%%
 # Code to read saved velocity and plot it on a grid. 
 # Final interpolation of the velocities. 
 
+#%% Code to test a coarser grid.
+master_vel_array = np.empty((25+5,25+5)) # Array in 30 x 30 dm = 300 cm x 300 cm
+master_vel_array[:,:] = None # nan everywhere.
+master_temp_array = np.copy(master_vel_array)
+
+vel_data_all = np.empty((num_files, 50, 6,6))
+vel_data_all[:,:,:,:] = None  
+temp_data_all = np.copy(vel_data_all)
+
+for i in range(num_files):
+    file_to_load = files_saved[i] # os.path.abspath gives pwd
+    data = np.load(file_to_load, allow_pickle=True)
+    vel_data = find_median(data['velocity_data_3d'])
+    temp_data = find_median(data['temperature_data_3d'])
+    vel_data_all[i,:,:,:] = data['velocity_data_3d']
+    temp_data_all[i,:,:,:] = data['temperature_data_3d']
+    table_up_pos = data['up_position']
+    table_right_pos = data['right_position']
+    pos_num = data['position_number']
+    data.close()
+    data_position_x, data_position_y = int(np.round(table_right_pos,0)), int(np.round(table_up_pos,0)) 
+    # input(rf"Position is up = {data_position_y}, right = {data_position_x}")
+    master_vel_array[np.round((sensor_physical_y_pos + data_position_y)/10, 0).astype(int), np.round((sensor_physical_x_pos + data_position_x)/10, 0).astype(int)] = vel_data
+    master_temp_array[np.round((sensor_physical_y_pos + data_position_y)/10, 0).astype(int),np.round((sensor_physical_x_pos + data_position_x)/10, 0).astype(int)] = temp_data
+    # for loop end
+
+master_vel_array_interpolated = fine_interpolation(master_vel_array, 'linear')
+master_temp_array_interpolated = fine_interpolation(master_temp_array, 'linear')
+
 #%% Test code to save random data
-test_up = np.linspace(0,40,5)
-test_right = np.linspace(0,40,5)
-count_pos = 0
-for i in range(len(test_up)):
-    for j in range(len(test_right)):
-        up, right = np.squeeze(test_up[i]+np.random.rand(1)), np.squeeze(test_right[j]+np.random.rand(1))
-        count_pos+=1
-        velocity_data_3d = (i+j)*np.random.rand(60,6,6)
-        temperature_data_3d = 20+(i+j)*np.random.rand(60,6,6)
-        filename = results_save_dir + rf"/Up_{up:.2f}_Right_{right:.2f}.npz"
-        np.savez(filename, velocity_data_3d=velocity_data_3d, temperature_data_3d=temperature_data_3d, up_position = up, right_position = right, position_number = count_pos)
+# test_up = np.linspace(0,40,5)
+# test_right = np.linspace(0,40,5)
+# count_pos = 0
+# for i in range(len(test_up)):
+#     for j in range(len(test_right)):
+#         up, right = np.squeeze(test_up[i]+np.random.rand(1)), np.squeeze(test_right[j]+np.random.rand(1))
+#         count_pos+=1
+#         velocity_data_3d = (i+j)*np.random.rand(60,6,6)
+#         temperature_data_3d = 20+(i+j)*np.random.rand(60,6,6)
+#         filename = results_save_dir + rf"/Up_{up:.2f}_Right_{right:.2f}.npz"
+#         np.savez(filename, velocity_data_3d=velocity_data_3d, temperature_data_3d=temperature_data_3d, up_position = up, right_position = right, position_number = count_pos)
         
